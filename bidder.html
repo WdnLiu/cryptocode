@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auction — Bidder</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+    .container { max-width: 640px; margin: 0 auto; padding: 2rem 1rem; }
+    h1 { color: #ff9f43; margin-bottom: 0.25rem; }
+    .role { color: #888; font-size: 0.85rem; margin-bottom: 2rem; }
+    .card { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+    .card h2 { color: #ffc07a; font-size: 1rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; color: #888; margin-bottom: 4px; }
+    input { width: 100%; padding: 9px 12px; background: #12121f; border: 1px solid #2a2a40; border-radius: 8px; color: #e0e0e0; font-size: 0.9rem; margin-bottom: 0.75rem; }
+    input:focus { outline: none; border-color: #ff9f43; }
+    button { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin-bottom: 0.5rem; transition: opacity 0.2s; }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary   { background: #ff9f43; color: #000; }
+    .btn-secondary { background: #2a2a40; color: #ccc; }
+    .btn-reveal    { background: #7c8aff; color: #fff; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .info-box { background: #12121f; border-radius: 8px; padding: 0.75rem 1rem; }
+    .info-box .val { font-size: 1rem; font-weight: 700; color: #ff9f43; margin-top: 4px; font-family: monospace; }
+    .info-box .lbl { font-size: 0.75rem; color: #666; }
+    .phase-COMMIT  { color: #4caf50 !important; }
+    .phase-REVEAL  { color: #ff9800 !important; }
+    .phase-SETTLED { color: #f44336 !important; }
+    .hash-box { background: #12121f; border-radius: 8px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; word-break: break-all; color: #4caf50; margin-bottom: 0.75rem; }
+    .log { background: #12121f; border-radius: 8px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; max-height: 180px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #aaa; }
+    .log .ok  { color: #4caf50; }
+    .log .err { color: #f44336; }
+    .badge { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+    .badge-yes { background: #1a3a1a; color: #4caf50; }
+    .badge-no  { background: #3a1a1a; color: #f44336; }
+    .hidden { display: none; }
+    a { color: #ff9f43; font-size: 0.8rem; }
+    .note { font-size: 0.8rem; color: #888; margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Reverse Auction</h1>
+  <p class="role">Bidder Panel &mdash; <a href="owner.html">Switch to Owner</a></p>
+
+  <!-- Connect -->
+  <div class="card">
+    <h2>Connection</h2>
+    <label>Contract Address</label>
+    <input id="contractAddr" placeholder="0x...">
+    <button class="btn-primary" onclick="connect()">Connect Wallet</button>
+    <div id="connInfo" class="hidden" style="margin-top:0.75rem">
+      <small style="color:#888">Wallet: <span id="walletAddr" style="color:#e0e0e0;font-family:monospace"></span></small>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="card">
+    <h2>Status</h2>
+    <div class="info-grid">
+      <div class="info-box"><div class="lbl">Phase</div><div class="val" id="phase">—</div></div>
+      <div class="info-box"><div class="lbl">Bidders</div><div class="val" id="bidderCount">—</div></div>
+      <div class="info-box"><div class="lbl">Challenge</div><div class="val" id="challenge">—</div></div>
+      <div class="info-box"><div class="lbl">Committed</div><div class="val" id="committed">—</div></div>
+    </div>
+    <div id="winnerBox" class="hidden" style="margin-top:0.75rem;padding:0.75rem;background:#12121f;border-radius:8px">
+      <div style="font-size:0.8rem;color:#888">Winner</div>
+      <div id="winner" style="font-family:monospace;font-size:0.85rem;color:#ff9f43;margin-top:4px"></div>
+      <div id="winningBid" style="font-size:0.8rem;color:#888;margin-top:2px"></div>
+    </div>
+    <button class="btn-secondary" style="margin-top:0.75rem" onclick="refresh()">Refresh</button>
+  </div>
+
+  <!-- Commit -->
+  <div class="card" id="commitCard">
+    <h2>1. Commit Bid</h2>
+    <p class="note">Your bid amount is hidden until the reveal phase. The deposit must be &ge; your bid amount.</p>
+    <label>Bid Amount (wei)</label>
+    <input type="number" id="bidAmount" placeholder="e.g. 1000000000000000">
+    <label>Secret (bytes32 hex)</label>
+    <input type="text" id="bidSecret" placeholder="0x...">
+    <button class="btn-secondary" onclick="generateSecret()">Generate Random Secret</button>
+    <label>Deposit (ETH) &mdash; must be &ge; bid amount</label>
+    <input type="text" id="depositAmt" placeholder="e.g. 0.001">
+    <div id="hashPreview" class="hash-box hidden"></div>
+    <button class="btn-primary" onclick="commitBid()">Commit Bid</button>
+  </div>
+
+  <!-- Reveal -->
+  <div class="card" id="revealCard">
+    <h2>2. Reveal Bid</h2>
+    <p class="note">Use the exact same amount and secret you committed with. Wrong values will be rejected.</p>
+    <label>Bid Amount (wei)</label>
+    <input type="number" id="revealAmount" placeholder="Must match committed amount">
+    <label>Secret (bytes32)</label>
+    <input type="text" id="revealSecret" placeholder="0x...">
+    <button class="btn-reveal" onclick="revealBid()">Reveal Bid</button>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <h2>Log</h2>
+    <div id="log" class="log">Waiting for connection...</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.9.0/ethers.umd.min.js"></script>
+<script>
+const ABI = [
+  "function getPhase() view returns (string)",
+  "function getBidderCount() view returns (uint256)",
+  "function verifyChallenge(address) view returns (bool)",
+  "function winner() view returns (address)",
+  "function winningBid() view returns (uint256)",
+  "function commits(address) view returns (bytes32 hash, uint256 deposit, bool revealed, uint256 revealedAmt)",
+  "function commitBid(bytes32) payable",
+  "function revealBid(uint256, bytes32)"
+];
+
+let provider, signer, contract, userAddr;
+
+function log(msg, type = "") {
+  const el = document.getElementById("log");
+  const line = document.createElement("div");
+  line.className = type;
+  line.textContent = msg;
+  el.prepend(line);
+}
+
+async function connect() {
+  try {
+    if (!window.ethereum) { alert("Install MetaMask"); return; }
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    userAddr = await signer.getAddress();
+    const contractAddr = document.getElementById("contractAddr").value.trim();
+    if (!contractAddr) { alert("Enter contract address"); return; }
+    contract = new ethers.Contract(contractAddr, ABI, signer);
+    document.getElementById("walletAddr").textContent = userAddr;
+    document.getElementById("connInfo").classList.remove("hidden");
+    log("Connected: " + userAddr, "ok");
+    await refresh();
+  } catch (e) { log("Error: " + e.message, "err"); }
+}
+
+async function refresh() {
+  if (!contract) return;
+  try {
+    const [phase, count, challenge, w, wb, commit] = await Promise.all([
+      contract.getPhase(),
+      contract.getBidderCount(),
+      contract.verifyChallenge(userAddr),
+      contract.winner(),
+      contract.winningBid(),
+      contract.commits(userAddr)
+    ]);
+
+    const phaseEl = document.getElementById("phase");
+    phaseEl.textContent = phase;
+    phaseEl.className = "val phase-" + phase;
+    document.getElementById("bidderCount").textContent = count.toString();
+    document.getElementById("challenge").innerHTML =
+      `<span class="badge ${challenge ? 'badge-yes' : 'badge-no'}">${challenge ? "Yes" : "No"}</span>`;
+    document.getElementById("committed").innerHTML =
+      `<span class="badge ${commit.hash !== ethers.ZeroHash ? 'badge-yes' : 'badge-no'}">${commit.hash !== ethers.ZeroHash ? "Yes" : "No"}</span>`;
+
+    if (w !== ethers.ZeroAddress) {
+      document.getElementById("winnerBox").classList.remove("hidden");
+      document.getElementById("winner").textContent = w;
+      document.getElementById("winningBid").textContent = ethers.formatEther(wb) + " ETH";
+    }
+  } catch (e) { log("Refresh error: " + e.message, "err"); }
+}
+
+function generateSecret() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const hex = "0x" + Array.from(bytes).map(b => b.toString(16).padStart(2, "0")).join("");
+  document.getElementById("bidSecret").value = hex;
+  log("Secret generated — save this!", "ok");
+  updateHashPreview();
+}
+
+function updateHashPreview() {
+  const amount = document.getElementById("bidAmount").value;
+  const secret = document.getElementById("bidSecret").value;
+  if (!amount || !secret || !secret.startsWith("0x")) return;
+  try {
+    const hash = ethers.solidityPackedKeccak256(["uint256", "bytes32"], [BigInt(amount), secret]);
+    const el = document.getElementById("hashPreview");
+    el.textContent = "Hash: " + hash;
+    el.classList.remove("hidden");
+  } catch (_) {}
+}
+
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("bidAmount").addEventListener("input", updateHashPreview);
+  document.getElementById("bidSecret").addEventListener("input", updateHashPreview);
+});
+
+async function commitBid() {
+  if (!contract) { alert("Connect first"); return; }
+  try {
+    const amount  = document.getElementById("bidAmount").value;
+    const secret  = document.getElementById("bidSecret").value;
+    const deposit = document.getElementById("depositAmt").value;
+    if (!amount || !secret || !deposit) { alert("Fill all fields"); return; }
+
+    const hash = ethers.solidityPackedKeccak256(["uint256", "bytes32"], [BigInt(amount), secret]);
+    log("Hash: " + hash);
+
+    const tx = await contract.commitBid(hash, { value: ethers.parseEther(deposit) });
+    log("Commit tx sent: " + tx.hash);
+    await tx.wait();
+    log("Bid committed!", "ok");
+    await refresh();
+  } catch (e) { log("Error: " + (e.reason || e.message), "err"); }
+}
+
+async function revealBid() {
+  if (!contract) { alert("Connect first"); return; }
+  try {
+    const amount = document.getElementById("revealAmount").value;
+    const secret = document.getElementById("revealSecret").value;
+    if (!amount || !secret) { alert("Fill all fields"); return; }
+
+    const tx = await contract.revealBid(BigInt(amount), secret);
+    log("Reveal tx sent: " + tx.hash);
+    await tx.wait();
+    log("Bid revealed!", "ok");
+    await refresh();
+  } catch (e) { log("Error: " + (e.reason || e.message), "err"); }
+}
+</script>
+</body>
+</html>

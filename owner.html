@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Auction — Owner</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f1a; color: #e0e0e0; min-height: 100vh; }
+    .container { max-width: 640px; margin: 0 auto; padding: 2rem 1rem; }
+    h1 { color: #7c8aff; margin-bottom: 0.25rem; }
+    .role { color: #888; font-size: 0.85rem; margin-bottom: 2rem; }
+    .card { background: #1a1a2e; border: 1px solid #2a2a40; border-radius: 12px; padding: 1.5rem; margin-bottom: 1.25rem; }
+    .card h2 { color: #aab0ff; font-size: 1rem; margin-bottom: 1rem; }
+    label { display: block; font-size: 0.8rem; color: #888; margin-bottom: 4px; }
+    input { width: 100%; padding: 9px 12px; background: #12121f; border: 1px solid #2a2a40; border-radius: 8px; color: #e0e0e0; font-size: 0.9rem; margin-bottom: 0.75rem; }
+    input:focus { outline: none; border-color: #7c8aff; }
+    button { width: 100%; padding: 10px; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; margin-bottom: 0.5rem; transition: opacity 0.2s; }
+    button:hover { opacity: 0.85; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary   { background: #7c8aff; color: #fff; }
+    .btn-secondary { background: #2a2a40; color: #ccc; }
+    .btn-danger    { background: #c0392b; color: #fff; }
+    .btn-green     { background: #27ae60; color: #fff; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .info-box { background: #12121f; border-radius: 8px; padding: 0.75rem 1rem; }
+    .info-box .val { font-size: 1.1rem; font-weight: 700; color: #7c8aff; margin-top: 4px; font-family: monospace; }
+    .info-box .lbl { font-size: 0.75rem; color: #666; }
+    .phase-COMMIT  { color: #4caf50 !important; }
+    .phase-REVEAL  { color: #ff9800 !important; }
+    .phase-SETTLED { color: #f44336 !important; }
+    .log { background: #12121f; border-radius: 8px; padding: 0.75rem; font-family: monospace; font-size: 0.8rem; max-height: 180px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; color: #aaa; }
+    .log .ok  { color: #4caf50; }
+    .log .err { color: #f44336; }
+    .hidden { display: none; }
+    a { color: #7c8aff; font-size: 0.8rem; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h1>Reverse Auction</h1>
+  <p class="role">Owner Panel &mdash; <a href="bidder.html">Switch to Bidder</a></p>
+
+  <!-- Connect -->
+  <div class="card">
+    <h2>Connection</h2>
+    <label>Contract Address</label>
+    <input id="contractAddr" placeholder="0x...">
+    <button class="btn-green" onclick="connect()">Connect Wallet</button>
+    <div id="connInfo" class="hidden" style="margin-top:0.75rem">
+      <small style="color:#888">Wallet: <span id="walletAddr" style="color:#e0e0e0;font-family:monospace"></span></small>
+    </div>
+  </div>
+
+  <!-- Status -->
+  <div class="card">
+    <h2>Auction Status</h2>
+    <div class="info-grid">
+      <div class="info-box"><div class="lbl">Phase</div><div class="val" id="phase">—</div></div>
+      <div class="info-box"><div class="lbl">Bidders</div><div class="val" id="bidderCount">—</div></div>
+      <div class="info-box"><div class="lbl">Winner</div><div class="val" id="winner" style="font-size:0.75rem">—</div></div>
+      <div class="info-box"><div class="lbl">Winning Bid</div><div class="val" id="winningBid">—</div></div>
+    </div>
+    <button class="btn-secondary" style="margin-top:0.75rem" onclick="refresh()">Refresh</button>
+  </div>
+
+  <!-- Grant Challenge -->
+  <div class="card">
+    <h2>Grant Challenge</h2>
+    <label>Bidder Address</label>
+    <input id="grantAddr" placeholder="0x...">
+    <button class="btn-primary" onclick="grantChallenge()">Grant Challenge</button>
+  </div>
+
+  <!-- Phase -->
+  <div class="card">
+    <h2>Phase Management</h2>
+    <p style="color:#888;font-size:0.85rem;margin-bottom:0.75rem">As owner you can advance at any time without waiting for the deadline.</p>
+    <button class="btn-primary" onclick="advancePhase()">Advance Phase</button>
+  </div>
+
+  <!-- Withdraw -->
+  <div class="card">
+    <h2>Withdraw Forfeited Deposits</h2>
+    <p style="color:#888;font-size:0.85rem;margin-bottom:0.75rem">Collect deposits from bidders who committed but did not reveal. Only available after settlement.</p>
+    <button class="btn-danger" onclick="withdraw()">Withdraw</button>
+  </div>
+
+  <!-- Log -->
+  <div class="card">
+    <h2>Log</h2>
+    <div id="log" class="log">Waiting for connection...</div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/ethers/6.9.0/ethers.umd.min.js"></script>
+<script>
+const ABI = [
+  "function getPhase() view returns (string)",
+  "function getBidderCount() view returns (uint256)",
+  "function winner() view returns (address)",
+  "function winningBid() view returns (uint256)",
+  "function grantChallenge(address)",
+  "function advancePhase()",
+  "function withdrawForfeited()"
+];
+
+let provider, signer, contract;
+
+function log(msg, type = "") {
+  const el = document.getElementById("log");
+  const line = document.createElement("div");
+  line.className = type;
+  line.textContent = msg;
+  el.prepend(line);
+}
+
+async function connect() {
+  try {
+    if (!window.ethereum) { alert("Install MetaMask"); return; }
+    provider = new ethers.BrowserProvider(window.ethereum);
+    await provider.send("eth_requestAccounts", []);
+    signer = await provider.getSigner();
+    const addr = await signer.getAddress();
+    const contractAddr = document.getElementById("contractAddr").value.trim();
+    if (!contractAddr) { alert("Enter contract address"); return; }
+    contract = new ethers.Contract(contractAddr, ABI, signer);
+    document.getElementById("walletAddr").textContent = addr;
+    document.getElementById("connInfo").classList.remove("hidden");
+    log("Connected: " + addr, "ok");
+    await refresh();
+  } catch (e) { log("Error: " + e.message, "err"); }
+}
+
+async function refresh() {
+  if (!contract) return;
+  try {
+    const [phase, count, w, wb] = await Promise.all([
+      contract.getPhase(),
+      contract.getBidderCount(),
+      contract.winner(),
+      contract.winningBid()
+    ]);
+    const phaseEl = document.getElementById("phase");
+    phaseEl.textContent = phase;
+    phaseEl.className = "val phase-" + phase;
+    document.getElementById("bidderCount").textContent = count.toString();
+    document.getElementById("winner").textContent = w === ethers.ZeroAddress ? "None" : w.slice(0,6)+"..."+w.slice(-4);
+    document.getElementById("winningBid").textContent = wb === 0n ? "—" : ethers.formatEther(wb) + " ETH";
+  } catch (e) { log("Refresh error: " + e.message, "err"); }
+}
+
+async function grantChallenge() {
+  if (!contract) { alert("Connect first"); return; }
+  try {
+    const addr = document.getElementById("grantAddr").value.trim();
+    if (!addr) { alert("Enter an address"); return; }
+    const tx = await contract.grantChallenge(addr);
+    log("Granting challenge... " + tx.hash);
+    await tx.wait();
+    log("Challenge granted to " + addr, "ok");
+  } catch (e) { log("Error: " + (e.reason || e.message), "err"); }
+}
+
+async function advancePhase() {
+  if (!contract) { alert("Connect first"); return; }
+  try {
+    const tx = await contract.advancePhase();
+    log("Advancing phase... " + tx.hash);
+    await tx.wait();
+    log("Phase advanced", "ok");
+    await refresh();
+  } catch (e) { log("Error: " + (e.reason || e.message), "err"); }
+}
+
+async function withdraw() {
+  if (!contract) { alert("Connect first"); return; }
+  try {
+    const tx = await contract.withdrawForfeited();
+    log("Withdrawing... " + tx.hash);
+    await tx.wait();
+    log("Withdrawn", "ok");
+  } catch (e) { log("Error: " + (e.reason || e.message), "err"); }
+}
+</script>
+</body>
+</html>
