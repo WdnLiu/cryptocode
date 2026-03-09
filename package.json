@@ -1,0 +1,20 @@
+{
+  "name": "cryptocode",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "flatten":    "bun run scripts/flatten.ts",
+    "predeploy":  "bun run flatten",
+    "deploy":     "bun run scripts/deploy.ts",
+    "dev":        "bun run scripts/dev.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "ethers": "^6.16.0",
+    "solc": "^0.8.34"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
