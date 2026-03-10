@@ -21,7 +21,7 @@ revealing them once everyone has committed.
 
 | Actor | Role | Trust assumption |
 |---|---|---|
-| **Owner (Buyer)** | The hiring company, deploys the contract, whitelists qualified candidates, advances phases | Semi-trusted, constrained by on-chain deadlines but could collude with a preferred candidate |
+| **Owner (Buyer)** | The hiring company, deploys the contract, whitelists qualified candidates | Semi-trusted, constrained by on-chain deadlines but could collude with a preferred candidate |
 | **Bidders (Candidates)** | Security engineer applicants, submit hidden salary bids and reveal them in the reveal phase | Untrusted, may try to front-run, grief, or snoop on other bids |
 | **Miners/Validators** | Order transactions within a block | Potentially malicious, may reorder txs for profit |
 
@@ -41,13 +41,16 @@ amounts (after reveal phase), winner address and winning bid.
 2. **Whitelist** - Owner calls `grantChallenge(address)` for each candidate who passed the
    qualification challenge (e.g. a CTF proving technical competance).
 3. **Commit** - Each whitelisted bidder computes `keccak256(amount, secret)` locally and calls
-   `commitBid(hash)` with an ETH deposit >= their actual bid amount. The deposit can be larger
-   to further obscure the real bid.
-4. **Advance** - Once the commit deadline passes (or the owner forces it), anyone calls
-   `advancePhase()` to move to `REVEAL`.
+   `commitBid(hash)` with an ETH deposit >= the contract's `minDeposit` threshold. The deposit
+   must also be >= their actual bid amount, which is enforced at reveal time. A larger deposit
+   further obscures the real bid.
+4. **Advance** - Once the commit deadline passes, anyone can call `advancePhase()` to move to
+   `REVEAL`. The contract enforces the deadline and reverts if it has not yet expired. Allowing
+   anyone (not just the owner) to trigger this prevents the owner from holding deposits hostage
+   by refusing to advance.
 5. **Reveal** - Each bidder calls `revealBid(amount, secret)`. The contract recomputes the hash
    and checks it matches the stored commit. Excess deposit (deposit - bid) is refunded immediately.
-6. **Settle** - After the reveal deadline, `advancePhase()` is called again. The contract finds
+6. **Settle** - After the reveal deadline passes, anyone can call `advancePhase()` again. The contract finds
    the lowest revealed bid, records the winner, and refunds all revealers their remaining deposits
    (the bid-amount portion held as collateral, the excess was already returned during reveal).
 7. **Withdraw** - Owner calls `withdrawForfeited()` to collect deposits from bidders who committed
@@ -101,7 +104,7 @@ The binding property of keccak256 (second pre-image resistance) prevents this.
 1. **Install and deploy**
    ```bash
    bun install
-   cp .env.example .env   # fill in PRIVATE_KEY and RPC_URL
+   cp .env.example .env   # fill in PRIVATE_KEY, RPC_URL, and optionally MIN_DEPOSIT (wei, default 0.01 ETH)
    bun run deploy         # prints the deployed contract address
    ```
 
