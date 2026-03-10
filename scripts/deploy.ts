@@ -23,6 +23,7 @@ if (!PRIVATE_KEY || !RPC_URL) {
 
 const COMMIT_DURATION = parseInt(process.env.COMMIT_DURATION ?? "300");
 const REVEAL_DURATION = parseInt(process.env.REVEAL_DURATION ?? "300");
+const MIN_DEPOSIT     = BigInt(process.env.MIN_DEPOSIT ?? "10000000000000000"); // default 0.01 ETH in wei
 
 // ---- Compile ----------------------------------------------------------------
 const source = readFileSync(`${ROOT}/flat/ReverseAuction.flat.sol`, "utf-8");
@@ -57,14 +58,15 @@ console.log("✓ Compiled  → artifacts/ReverseAuction.json");
 const provider = new ethers.JsonRpcProvider(RPC_URL);
 const wallet   = new ethers.Wallet(PRIVATE_KEY, provider);
 
-console.log(`\nDeployer:  ${wallet.address}`);
-console.log(`Network:   ${RPC_URL}`);
-console.log(`Commit:    ${COMMIT_DURATION}s`);
-console.log(`Reveal:    ${REVEAL_DURATION}s`);
+console.log(`\nDeployer:    ${wallet.address}`);
+console.log(`Network:     ${RPC_URL}`);
+console.log(`Commit:      ${COMMIT_DURATION}s`);
+console.log(`Reveal:      ${REVEAL_DURATION}s`);
+console.log(`Min deposit: ${MIN_DEPOSIT} wei`);
 console.log("\nDeploying...");
 
 const factory  = new ethers.ContractFactory(abi, bytecode, wallet);
-const contract = await factory.deploy(COMMIT_DURATION, REVEAL_DURATION);
+const contract = await factory.deploy(COMMIT_DURATION, REVEAL_DURATION, MIN_DEPOSIT);
 console.log(`Tx hash:   ${contract.deploymentTransaction()?.hash}`);
 
 await contract.waitForDeployment();
