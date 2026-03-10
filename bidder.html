@@ -64,6 +64,7 @@
       <div class="info-box"><div class="lbl">Bidders</div><div class="val" id="bidderCount">—</div></div>
       <div class="info-box"><div class="lbl">Challenge</div><div class="val" id="challenge">—</div></div>
       <div class="info-box"><div class="lbl">Committed</div><div class="val" id="committed">—</div></div>
+      <div class="info-box"><div class="lbl">Min Deposit</div><div class="val" id="minDeposit">—</div></div>
     </div>
     <div id="winnerBox" class="hidden" style="margin-top:0.75rem;padding:0.75rem;background:#12121f;border-radius:8px">
       <div style="font-size:0.8rem;color:#888">Winner</div>
@@ -83,7 +84,7 @@
     <input type="text" id="bidSecret" placeholder="0x...">
     <button class="btn-secondary" onclick="generateSecret()">Generate Random Secret</button>
     <label>Deposit (ETH) &mdash; must be &ge; bid amount</label>
-    <input type="text" id="depositAmt" placeholder="e.g. 0.001">
+    <input type="text" id="depositAmt" placeholder="must be ≥ min deposit">
     <div id="hashPreview" class="hash-box hidden"></div>
     <button class="btn-primary" onclick="commitBid()">Commit Bid</button>
   </div>
@@ -115,6 +116,7 @@ const ABI = [
   "function winner() view returns (address)",
   "function winningBid() view returns (uint256)",
   "function commits(address) view returns (bytes32 hash, uint256 deposit, bool revealed, uint256 revealedAmt)",
+  "function getMinDeposit() view returns (uint256)",
   "function commitBid(bytes32) payable",
   "function revealBid(uint256, bytes32)"
 ];
@@ -149,13 +151,14 @@ async function connect() {
 async function refresh() {
   if (!contract) return;
   try {
-    const [phase, count, challenge, w, wb, commit] = await Promise.all([
+    const [phase, count, challenge, w, wb, commit, minDep] = await Promise.all([
       contract.getPhase(),
       contract.getBidderCount(),
       contract.verifyChallenge(userAddr),
       contract.winner(),
       contract.winningBid(),
-      contract.commits(userAddr)
+      contract.commits(userAddr),
+      contract.getMinDeposit()
     ]);
 
     const phaseEl = document.getElementById("phase");
@@ -166,6 +169,9 @@ async function refresh() {
       `<span class="badge ${challenge ? 'badge-yes' : 'badge-no'}">${challenge ? "Yes" : "No"}</span>`;
     document.getElementById("committed").innerHTML =
       `<span class="badge ${commit.hash !== ethers.ZeroHash ? 'badge-yes' : 'badge-no'}">${commit.hash !== ethers.ZeroHash ? "Yes" : "No"}</span>`;
+    document.getElementById("minDeposit").textContent = ethers.formatEther(minDep) + " ETH";
+    const minEth = ethers.formatEther(minDep);
+    document.getElementById("depositAmt").placeholder = `min ${minEth} ETH`;
 
     if (w !== ethers.ZeroAddress) {
       document.getElementById("winnerBox").classList.remove("hidden");
