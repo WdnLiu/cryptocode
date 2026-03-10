@@ -10,7 +10,7 @@ library CommitPhase {
     function execute(AuctionState storage state, bytes32 _hash) internal {
         require(state.challengePassed[msg.sender], "Challenge not passed");
         require(state.commits[msg.sender].hash == bytes32(0), "Already committed");
-        require(msg.value > 0, "Must deposit ETH");
+        require(msg.value >= state.minDeposit, "Deposit below minimum");
 
         state.commits[msg.sender] = Commit({
             hash:        _hash,

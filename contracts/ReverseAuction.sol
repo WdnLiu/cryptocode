@@ -26,11 +26,13 @@ contract ReverseAuction {
     }
 
     // ---- Constructor --------------------------------------------------------
-    constructor(uint256 _commitDurationSecs, uint256 _revealDurationSecs) {
+    constructor(uint256 _commitDurationSecs, uint256 _revealDurationSecs, uint256 _minDeposit) {
+        require(_minDeposit > 0, "Min deposit must be > 0");
         state.owner          = msg.sender;
         state.phase          = Phase.COMMIT;
         state.commitDeadline = block.timestamp + _commitDurationSecs;
         state.revealDeadline = state.commitDeadline + _revealDurationSecs;
+        state.minDeposit     = _minDeposit;
 
         emit AuctionCreated(state.owner, state.commitDeadline, state.revealDeadline);
     }
@@ -83,6 +85,10 @@ contract ReverseAuction {
     // ---- Views --------------------------------------------------------------
     function computeHash(uint256 _amount, bytes32 _secret) external pure returns (bytes32) {
         return CommitRevealLib.computeHash(_amount, _secret);
+    }
+
+    function getMinDeposit() external view returns (uint256) {
+        return state.minDeposit;
     }
 
     function getPhase() external view returns (string memory) {

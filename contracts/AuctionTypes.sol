@@ -17,6 +17,7 @@ struct AuctionState {
     Phase   phase;
     uint256 commitDeadline;
     uint256 revealDeadline;
+    uint256 minDeposit;
     mapping(address => bool)   challengePassed;
     mapping(address => Commit) commits;
     address[] bidders;
